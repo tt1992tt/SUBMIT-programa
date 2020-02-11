@@ -1,0 +1,300 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_TUCUMAN_ARCHIVO_RET_PER
+*&---------------------------------------------------------------------*
+*& Date/Author  : 02/2020
+*& Author       : Esteban Wilder
+*& Contact      : ewilder@infoaval.com
+*&---------------------------------------------------------------------*
+REPORT zfi_tucuman_archivo_ret_per.
+
+DATA: gv_rc TYPE sy-subrc.
+
+TYPES: BEGIN OF ts_so,
+         sign   TYPE char1,
+         option TYPE char2,
+         low    TYPE char3,
+         high   TYPE char2,
+       END OF ts_so.
+
+DATA: ls_so TYPE ts_so.
+
+TYPES: BEGIN OF ts_so_f,
+         sign   TYPE char1,
+         option TYPE char2,
+         low    TYPE char8,
+         high   TYPE char8,
+       END OF ts_so_f.
+
+DATA: ts_so_f TYPE ts_so_f.
+
+TABLES: bset, bkpf, sscrfields, with_item.
+
+SELECTION-SCREEN BEGIN OF BLOCK b01 WITH FRAME TITLE text-s01.
+PARAMETERS:     pa_bukrs TYPE bukrs MEMORY ID buk OBLIGATORY.
+SELECT-OPTIONS: so_belnr FOR bkpf-belnr,
+                so_blart FOR bkpf-blart.
+PARAMETERS:     pa_gjahr TYPE gjahr MEMORY ID gjr OBLIGATORY.
+SELECT-OPTIONS: so_budat FOR bkpf-budat.
+
+SELECTION-SCREEN END OF BLOCK b01.
+
+SELECTION-SCREEN BEGIN OF BLOCK b02 WITH FRAME TITLE text-s02.
+
+PARAMETERS: pa_re RADIOBUTTON GROUP a1.
+SELECT-OPTIONS: so_witht FOR with_item-witht. "Retencion
+
+PARAMETERS: pa_pe RADIOBUTTON GROUP a1.
+SELECT-OPTIONS: so_ktosl FOR bset-ktosl. "Percepción
+
+SELECTION-SCREEN ULINE.
+
+PARAMETERS: pa_filer TYPE rlgrap-filename.
+PARAMETERS: pa_filep TYPE rlgrap-filename.
+PARAMETERS: pa_datos TYPE rlgrap-filename.
+
+SELECTION-SCREEN END OF BLOCK b02.
+
+* Función para tomar Archivo Local
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR pa_filer.
+
+  DATA: ifiletable TYPE filetable.
+  DATA: xfiletable LIKE LINE OF ifiletable.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    CHANGING
+      file_table              = ifiletable
+      rc                      = gv_rc
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3
+      not_supported_by_gui    = 4
+      OTHERS                  = 5.
+  READ TABLE ifiletable INTO xfiletable INDEX 1.
+  IF sy-subrc = 0.
+    pa_filer = xfiletable-filename.
+  ENDIF.
+
+* Función para tomar Archivo Local
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR pa_filep.
+
+  DATA: ifiletable TYPE filetable.
+  DATA: xfiletable LIKE LINE OF ifiletable.
+
+  CALL METHOD cl_gui_frontend_services=>file_open_dialog
+    CHANGING
+      file_table              = ifiletable
+      rc                      = gv_rc
+    EXCEPTIONS
+      file_open_dialog_failed = 1
+      cntl_error              = 2
+      error_no_gui            = 3
+      not_supported_by_gui    = 4
+      OTHERS                  = 5.
+  READ TABLE ifiletable INTO xfiletable INDEX 1.
+  IF sy-subrc = 0.
+    pa_filep = xfiletable-filename.
+  ENDIF.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR so_ktosl-low.
+  CALL FUNCTION 'J_1A_HELP_KTOSL'
+    EXPORTING
+      display = ' '
+    IMPORTING
+      e_ktosl = so_ktosl-low
+    EXCEPTIONS
+      OTHERS  = 1.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR so_ktosl-high.
+  CALL FUNCTION 'J_1A_HELP_KTOSL'
+    EXPORTING
+      display = ' '
+    IMPORTING
+      e_ktosl = so_ktosl-high
+    EXCEPTIONS
+      OTHERS  = 1.
+
+START-OF-SELECTION.
+
+  CLEAR: gv_rc.
+
+  IF pa_re IS NOT INITIAL.
+    IF so_witht IS NOT INITIAL.
+      IF pa_filer IS INITIAL.
+        MESSAGE 'Ingrese Ruta del Archivo' TYPE 'S'.
+        gv_rc = 1.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  IF pa_pe IS NOT INITIAL.
+    IF so_ktosl IS NOT INITIAL.
+      IF pa_filep IS INITIAL.
+        MESSAGE 'Ingrese Ruta del Archivo' TYPE 'S'.
+        gv_rc = 1.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+  IF gv_rc = '0'.
+
+    DATA: lt_rsparams TYPE TABLE OF rsparams,
+          vl_rsparams TYPE rsparams.
+
+    REFRESH lt_rsparams.
+    CLEAR vl_rsparams.
+
+    IF pa_bukrs IS NOT INITIAL.
+      vl_rsparams-selname = 'PA_BUKRS'.
+      vl_rsparams-kind = 'P'.
+      vl_rsparams-sign = 'I'.
+      vl_rsparams-option = 'EQ'.
+      vl_rsparams-low = pa_bukrs.
+      APPEND vl_rsparams TO lt_rsparams.
+      CLEAR vl_rsparams.
+    ENDIF.
+
+    IF pa_gjahr IS NOT INITIAL.
+      vl_rsparams-selname = 'PA_GJAHR'.
+      vl_rsparams-kind = 'P'.
+      vl_rsparams-sign = 'I'.
+      vl_rsparams-option = 'EQ'.
+      vl_rsparams-low = pa_gjahr.
+      APPEND vl_rsparams TO lt_rsparams.
+      CLEAR vl_rsparams.
+    ENDIF.
+
+    IF so_belnr IS NOT INITIAL.
+      LOOP AT so_belnr INTO ls_so.
+        vl_rsparams-selname = 'SO_BELNR'.
+        vl_rsparams-kind = 'S'.
+        vl_rsparams-sign = 'I'.
+        IF so_belnr-high IS NOT INITIAL.
+          vl_rsparams-option = 'BT'.
+          vl_rsparams-low = ls_so-low.
+          vl_rsparams-high = ls_so-high.
+        ELSE.
+          vl_rsparams-option = 'EQ'.
+          vl_rsparams-low = ls_so-low.
+        ENDIF.
+        APPEND vl_rsparams TO lt_rsparams.
+        CLEAR: vl_rsparams, ls_so.
+      ENDLOOP.
+    ENDIF.
+
+    IF so_blart IS NOT INITIAL.
+      LOOP AT so_blart INTO ls_so.
+        vl_rsparams-selname = 'SO_BLART'.
+        vl_rsparams-kind = 'S'.
+        vl_rsparams-sign = 'I'.
+        IF so_blart-high IS NOT INITIAL.
+          vl_rsparams-option = 'BT'.
+          vl_rsparams-low = ls_so-low.
+          vl_rsparams-high = ls_so-high.
+        ELSE.
+          vl_rsparams-option = 'EQ'.
+          vl_rsparams-low = ls_so-low.
+        ENDIF.
+        APPEND vl_rsparams TO lt_rsparams.
+        CLEAR: vl_rsparams, ls_so.
+      ENDLOOP.
+    ENDIF.
+
+    IF so_budat IS NOT INITIAL.
+      LOOP AT so_budat INTO ts_so_f.
+        vl_rsparams-selname = 'SO_BUDAT'.
+        vl_rsparams-kind = 'S'.
+        vl_rsparams-sign = 'I'.
+        IF so_budat-high IS NOT INITIAL.
+          vl_rsparams-option = 'BT'.
+          vl_rsparams-low = ts_so_f-low.
+          vl_rsparams-high = ts_so_f-high.
+        ELSE.
+          vl_rsparams-option = 'EQ'.
+          vl_rsparams-low = ts_so_f-low.
+        ENDIF.
+        APPEND vl_rsparams TO lt_rsparams.
+        CLEAR: vl_rsparams, ts_so_f.
+      ENDLOOP.
+    ENDIF.
+
+    IF pa_re IS NOT INITIAL.
+
+      IF so_witht IS NOT INITIAL.
+        LOOP AT so_witht INTO ls_so.
+          vl_rsparams-selname = 'SO_WITHT'.
+          vl_rsparams-kind = 'S'.
+          vl_rsparams-sign = 'I'.
+          IF so_witht-high IS NOT INITIAL.
+            vl_rsparams-option = 'BT'.
+            vl_rsparams-low = ls_so-low.
+            vl_rsparams-high = ls_so-high.
+          ELSE.
+            vl_rsparams-option = 'EQ'.
+            vl_rsparams-low = ls_so-low.
+          ENDIF.
+          APPEND vl_rsparams TO lt_rsparams.
+          CLEAR: vl_rsparams, ls_so.
+        ENDLOOP.
+      ENDIF.
+
+      vl_rsparams-selname = 'PA_FILER'.
+      vl_rsparams-kind = 'P'.
+      vl_rsparams-sign = 'I'.
+      vl_rsparams-option = 'EQ'.
+      vl_rsparams-low = pa_filer.
+      APPEND vl_rsparams TO lt_rsparams.
+      CLEAR vl_rsparams.
+
+      REFRESH so_ktosl.
+      CLEAR so_ktosl.
+
+      SUBMIT zfi_tucuman_archivo_ret WITH SELECTION-TABLE lt_rsparams AND RETURN.
+
+    ELSEIF pa_pe IS NOT INITIAL.
+
+      IF so_ktosl IS NOT INITIAL.
+        LOOP AT so_ktosl INTO ls_so.
+          vl_rsparams-selname = 'SO_KTOSL'.
+          vl_rsparams-kind = 'S'.
+          vl_rsparams-sign = 'I'.
+          IF so_ktosl-high IS NOT INITIAL.
+            vl_rsparams-option = 'BT'.
+            vl_rsparams-low = ls_so-low.
+            vl_rsparams-high = ls_so-high.
+          ELSE.
+            vl_rsparams-option = 'EQ'.
+            vl_rsparams-low = ls_so-low.
+          ENDIF.
+          APPEND vl_rsparams TO lt_rsparams.
+          CLEAR: vl_rsparams, ls_so.
+        ENDLOOP.
+      ENDIF.
+
+      vl_rsparams-selname = 'PA_FILEP'. "pa_filep
+      vl_rsparams-kind = 'P'.
+      vl_rsparams-sign = 'I'.
+      vl_rsparams-option = 'EQ'.
+      vl_rsparams-low = pa_filep.
+      APPEND vl_rsparams TO lt_rsparams.
+      CLEAR vl_rsparams.
+
+      REFRESH so_witht.
+      CLEAR so_witht.
+
+      vl_rsparams-selname = 'PA_DATOS'. "pa_filep
+      vl_rsparams-kind = 'P'.
+      vl_rsparams-sign = 'I'.
+      vl_rsparams-option = 'EQ'.
+      vl_rsparams-low = pa_filep.
+      APPEND vl_rsparams TO lt_rsparams.
+      CLEAR vl_rsparams.
+
+      REFRESH so_witht.
+      CLEAR so_witht.
+
+      SUBMIT zfi_tucuman_archivo_per WITH SELECTION-TABLE lt_rsparams AND RETURN.
+
+    ENDIF.
+
+  ENDIF.
